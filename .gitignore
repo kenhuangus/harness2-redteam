@@ -1,0 +1,9 @@
+.env
+*.env
+runs/
+executions/
+__pycache__/
+*.pyc
+dependencies/
+.venv/
+*.log
