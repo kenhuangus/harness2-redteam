@@ -95,28 +95,36 @@ def _or_call(messages: list[dict]) -> dict:
         "tools": TOOLS,
         "tool_choice": "auto",
         "temperature": 0,
-        "max_tokens": 1024,
+        "max_tokens": 512,
     }
     body = json.dumps(payload).encode()
-    p = subprocess.run(
-        [
-            "curl", "-sS", "--http1.1", "--max-time", "120",
-            "-X", "POST", OR_URL,
-            "-H", "Content-Type: application/json",
-            "-H", "Authorization: Bearer " + _key(),
-            "-H", "HTTP-Referer: https://github.com/kenhuangus/harness2-redteam",
-            "-H", "X-Title: harness2-redteam victim",
-            "--data-binary", "@-",
-        ],
-        input=body,
-        capture_output=True,
-    )
-    if p.returncode != 0:
-        raise RuntimeError(f"curl failed: {p.stderr.decode()[-200:]}")
-    try:
-        return json.loads(p.stdout.decode())
-    except json.JSONDecodeError:
-        raise RuntimeError(f"bad JSON from OpenRouter: {p.stdout.decode()[-200:]}")
+    last_err = ""
+    # The free model endpoint is flaky: responses can stall mid-stream.
+    # Retry with backoff rather than failing the whole attack episode.
+    for attempt in range(3):
+        if attempt:
+            time.sleep(5 * attempt)
+        p = subprocess.run(
+            [
+                "curl", "-sS", "--http1.1", "--max-time", "240",
+                "-X", "POST", OR_URL,
+                "-H", "Content-Type: application/json",
+                "-H", "Authorization: Bearer " + _key(),
+                "-H", "HTTP-Referer: https://github.com/kenhuangus/harness2-redteam",
+                "-H", "X-Title: harness2-redteam victim",
+                "--data-binary", "@-",
+            ],
+            input=body,
+            capture_output=True,
+        )
+        if p.returncode != 0:
+            last_err = f"curl failed: {p.stderr.decode()[-200:]}"
+            continue
+        try:
+            return json.loads(p.stdout.decode())
+        except json.JSONDecodeError:
+            last_err = f"bad JSON from OpenRouter: {p.stdout.decode()[-200:]}"
+    raise RuntimeError(f"victim model unreachable after 3 attempts: {last_err}")
 
 
 def _sign(secret: bytes, entry: dict) -> str:

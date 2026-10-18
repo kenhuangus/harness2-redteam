@@ -23,10 +23,11 @@ if not message.strip():
 p = subprocess.run(
     [sys.executable, os.path.join(victim_dir, "victim.py"),
      "--victim-dir", victim_dir, "--message", message],
-    capture_output=True, text=True, timeout=400,
+    capture_output=True, text=True, timeout=900,
 )
 print(p.stdout, end="")
-if p.stderr.strip():
-    print(p.stderr, file=sys.stderr, end="")
 if p.returncode != 0:
-    sys.exit(p.returncode)
+    err = (p.stderr.strip() or "unknown error").splitlines()
+    print(f"VICTIM_ERROR: the victim did not respond ({err[-1][:200]}). "
+          f"Wait a minute and try again.", file=sys.stderr)
+    sys.exit(1)
